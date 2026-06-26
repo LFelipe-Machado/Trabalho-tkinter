@@ -14,6 +14,7 @@ tipofigura_var = StringVar(janela)
 janela.columnconfigure(1, weight=1)
 janela.rowconfigure(9, weight=1)
 
+
 # Funções do mouse
 def iniciar_figuranova(event):
     global figuranova
@@ -127,7 +128,7 @@ areadesenho.grid(row=0,
                  rowspan=10,
                  padx=12,
                  pady=6,
-                 sticky=NSEW) 
+                 sticky=NSEW)  
 
 areadesenho.bind('<ButtonPress-1>', iniciar_figuranova)
 areadesenho.bind('<B1-Motion>', atualizar_figuranova)
