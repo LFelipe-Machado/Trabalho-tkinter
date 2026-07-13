@@ -1,142 +1,145 @@
-
-@package visao.visao
-@brief Módulo contendo a classe de visão do padrão MVC.
+"""
+@package controlador.controlador
+@brief Módulo contendo a classe controladora do padrão MVC.
 @author Felipe Machado e Ranieri Pereira
 @version 2.0
 @since 2026-07-08
+"""
+
+from modelo.figuras import Linha, Rabisco, Retangulo, Oval, Circulo, Poligono
 
 
-from tkinter import *
-from tkinter import colorchooser, filedialog
-
-
-class Visao:
+class Controlador:
     """
-    @brief Classe responsável pela interface gráfica do sistema de desenho.
+    @brief Classe responsável por conectar a Visão ao Modelo no padrão MVC.
 
-    Implementa a camada de Visão do padrão MVC, criando e gerenciando
-    todos os widgets tkinter: janela, canvas, menu, botões e labels.
+    Gerencia os eventos do mouse, cria as figuras corretas e coordena
+    as operações de salvar e abrir desenhos.
 
     @author Felipe Machado e Ranieri Pereira
     @version 2.0
     @since 2026-07-08
     """
 
-    def __init__(self, janela):
+    def __init__(self, visao, desenho):
         """
-        @brief Inicializa a visão configurando a janela e criando os widgets.
-        @param janela: Janela principal tkinter.
-        @type janela: tkinter.Tk
+        @brief Inicializa o controlador conectando visão e modelo.
+        @param visao: Instância da Visão com os widgets tkinter.
+        @type visao: visao.visao.Visao
+        @param desenho: Instância do Desenho com a lista de figuras.
+        @type desenho: modelo.figuras.Desenho
         """
-        self.janela = janela
-        self.janela.title('Projeto Felipe e Ranieri Tkinter')
-        self.janela.geometry('1024x576')
+        self.visao = visao
+        self.desenho = desenho
+        self.figuranova = None
 
-        self.tipofigura_var = StringVar(janela)
-        self.cor_borda = '#000000'
-        self.cor_preenchimento = '#ffffff'
+        self.visao.areadesenho.bind('<ButtonPress-1>',   self.iniciar_figuranova)
+        self.visao.areadesenho.bind('<B1-Motion>',       self.atualizar_figuranova)
+        self.visao.areadesenho.bind('<ButtonRelease-1>', self.incluir_figuranova)
+        self.visao.areadesenho.bind('<ButtonPress-3>',   self.finalizar_poligono)
 
-        self.janela.columnconfigure(1, weight=1)
-        self.janela.rowconfigure(9, weight=1)
+        self.visao._on_salvar = self.salvar
+        self.visao._on_abrir  = self.abrir
 
-        self._criar_menu()
-        self._criar_widgets()
+    def iniciar_figuranova(self, event):
+        """
+        @brief Cria uma nova figura ao pressionar o botão do mouse.
 
-    def _criar_menu(self):
-        """
-        @brief Cria a barra de menu com as opções Arquivo > Salvar e Abrir.
-        """
-        menubar = Menu(self.janela)
-        menu_arquivo = Menu(menubar, tearoff=0)
-        menu_arquivo.add_command(label='Abrir', command=self.pedir_caminho_abrir)
-        menu_arquivo.add_command(label='Salvar', command=self.pedir_caminho_salvar)
-        menubar.add_cascade(label='Arquivo', menu=menu_arquivo)
-        self.janela.config(menu=menubar)
+        Se já existe um polígono em construção, adiciona um ponto a ele.
 
-        # Callbacks a serem definidos pelo controlador
-        self._on_salvar = None
-        self._on_abrir = None
+        @param event: Evento de mouse com coordenadas x e y.
+        @type event: tkinter.Event
+        """
+        tipo = self.visao.tipofigura_var.get()
+        cb   = self.visao.cor_borda
+        cp   = self.visao.cor_preenchimento
 
-        menu_arquivo.entryconfig('Salvar', command=lambda: self._on_salvar and self._on_salvar())
-        menu_arquivo.entryconfig('Abrir',  command=lambda: self._on_abrir  and self._on_abrir())
+        if tipo == 'Polígono' and self.figuranova is not None:
+            self.figuranova.adicionar_ponto(event.x, event.y)
+            self.visao.desenhar_figuras(self.desenho.figuras)
+            self.visao.desenhar_figuranova(self.figuranova)
+            return
 
-    def _criar_widgets(self):
-        """
-        @brief Cria todos os widgets da interface: labels, menus e canvas.
-        """
-        Label(self.janela, text='Forma').grid(row=0, column=0, padx=12, pady=6, sticky=NW)
+        if tipo == 'Linha':
+            self.figuranova = Linha(event.x, event.y, cb)
+        elif tipo == 'Rabisco':
+            self.figuranova = Rabisco(event.x, event.y, cb)
+        elif tipo == 'Retângulo':
+            self.figuranova = Retangulo(event.x, event.y, cb, cp)
+        elif tipo == 'Oval':
+            self.figuranova = Oval(event.x, event.y, cb, cp)
+        elif tipo == 'Círculo':
+            self.figuranova = Circulo(event.x, event.y, cb, cp)
+        elif tipo == 'Polígono':
+            self.figuranova = Poligono(event.x, event.y, cb, cp)
 
-        OptionMenu(self.janela, self.tipofigura_var,
-                   'Linha', 'Linha', 'Rabisco', 'Retângulo', 'Oval', 'Círculo', 'Polígono'
-                   ).grid(row=1, column=0, padx=12, sticky=NW)
+    def atualizar_figuranova(self, event):
+        """
+        @brief Atualiza a figura em construção enquanto o mouse é arrastado.
+        @param event: Evento de mouse com coordenadas x e y.
+        @type event: tkinter.Event
+        """
+        if self.figuranova is None:
+            return
 
-        Label(self.janela, text='Borda:').grid(row=2, column=0, padx=12, pady=(12, 0), sticky=NW)
-        self.btn_cor_borda = Button(self.janela, text='     ', bg=self.cor_borda,
-                                    command=self.escolher_cor_borda, relief=RIDGE)
-        self.btn_cor_borda.grid(row=3, column=0, padx=12, sticky=NW)
+        tipo = self.visao.tipofigura_var.get()
 
-        Label(self.janela, text='Preenchimento:').grid(row=4, column=0, padx=12, pady=(12, 0), sticky=NW)
-        self.btn_cor_preench = Button(self.janela, text='     ', bg=self.cor_preenchimento,
-                                      command=self.escolher_cor_preenchimento, relief=RIDGE)
-        self.btn_cor_preench.grid(row=5, column=0, padx=12, sticky=NW)
+        if tipo == 'Rabisco':
+            self.figuranova.adicionar_ponto(event.x, event.y)
+        elif tipo == 'Polígono':
+            self.visao.desenhar_figuras(self.desenho.figuras)
+            self.visao.desenhar_figuranova(self.figuranova)
+            ultimo = self.figuranova.pontos[-1]
+            self.visao.areadesenho.create_line(ultimo[0], ultimo[1], event.x, event.y,
+                                               fill=self.figuranova.cor_borda, dash=(4, 2))
+            return
+        else:
+            self.figuranova.atualizar(event.x, event.y)
 
-        self.areadesenho = Canvas(self.janela, bg='white')
-        self.areadesenho.grid(row=0, column=1, rowspan=10, padx=12, pady=6, sticky=NSEW)
+        self.visao.desenhar_figuras(self.desenho.figuras)
+        self.visao.desenhar_figuranova(self.figuranova)
 
-    def escolher_cor_borda(self):
+    def incluir_figuranova(self, event):
         """
-        @brief Abre o seletor de cor para a borda e atualiza o botão.
-        """
-        cor = colorchooser.askcolor(title='Cor da borda', color=self.cor_borda)
-        if cor[1]:
-            self.cor_borda = cor[1]
-            self.btn_cor_borda.config(bg=self.cor_borda)
+        @brief Finaliza e salva a figura ao soltar o botão do mouse.
 
-    def escolher_cor_preenchimento(self):
-        """
-        @brief Abre o seletor de cor para o preenchimento e atualiza o botão.
-        """
-        cor = colorchooser.askcolor(title='Cor de preenchimento', color=self.cor_preenchimento)
-        if cor[1]:
-            self.cor_preenchimento = cor[1]
-            self.btn_cor_preench.config(bg=self.cor_preenchimento)
+        Polígono não é finalizado aqui — requer clique direito.
 
-    def pedir_caminho_salvar(self):
+        @param event: Evento de mouse.
+        @type event: tkinter.Event
         """
-        @brief Abre o diálogo de salvar arquivo e retorna o caminho escolhido.
-        @return: Caminho do arquivo ou None se cancelado.
-        @rtype: str ou None
-        """
-        return filedialog.asksaveasfilename(
-            defaultextension='.json',
-            filetypes=[('Arquivo de Desenho', '*.json'), ('Todos os arquivos', '*.*')]
-        )
+        if self.visao.tipofigura_var.get() == 'Polígono':
+            return
+        if self.figuranova is not None and not self.figuranova.incompleta():
+            self.desenho.figuras.append(self.figuranova)
+            self.figuranova = None
+        self.visao.desenhar_figuras(self.desenho.figuras)
 
-    def pedir_caminho_abrir(self):
+    def finalizar_poligono(self, event):
         """
-        @brief Abre o diálogo de abrir arquivo e retorna o caminho escolhido.
-        @return: Caminho do arquivo ou None se cancelado.
-        @rtype: str ou None
+        @brief Finaliza o polígono ao clicar com o botão direito do mouse.
+        @param event: Evento de mouse.
+        @type event: tkinter.Event
         """
-        return filedialog.askopenfilename(
-            filetypes=[('Arquivo de Desenho', '*.json'), ('Todos os arquivos', '*.*')]
-        )
+        if self.figuranova is not None and not self.figuranova.incompleta():
+            self.desenho.figuras.append(self.figuranova)
+            self.figuranova = None
+        self.visao.desenhar_figuras(self.desenho.figuras)
 
-    def desenhar_figuras(self, figuras):
+    def salvar(self):
         """
-        @brief Limpa o canvas e redesenha todas as figuras salvas.
-        @param figuras: Lista de figuras a serem desenhadas.
-        @type figuras: list[Figura]
+        @brief Abre o diálogo de salvar e persiste o desenho em JSON.
         """
-        self.areadesenho.delete('all')
-        for figura in figuras:
-            figura.desenhar(self.areadesenho)
+        caminho = self.visao.pedir_caminho_salvar()
+        if caminho:
+            self.desenho.salvar(caminho)
 
-    def desenhar_figuranova(self, figuranova):
+    def abrir(self):
         """
-        @brief Desenha o preview pontilhado da figura sendo criada.
-        @param figuranova: Figura em construção ou None.
-        @type figuranova: Figura ou None
+        @brief Abre o diálogo de abrir e carrega um desenho salvo em JSON.
         """
-        if figuranova is not None:
-            figuranova.desenhar(self.areadesenho, dash=(4, 2))
+        caminho = self.visao.pedir_caminho_abrir()
+        if caminho:
+            self.desenho.abrir(caminho)
+            self.visao.desenhar_figuras(self.desenho.figuras)
+
