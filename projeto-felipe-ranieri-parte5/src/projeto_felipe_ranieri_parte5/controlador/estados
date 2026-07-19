@@ -1,0 +1,266 @@
+"""
+@package controlador.estados
+@brief Módulo com os estados de desenho do padrão State.
+
+Cada ferramenta selecionável na Visão (Linha, Retângulo, Oval, Círculo,
+Rabisco ou Polígono) passa a ser representada por uma classe de estado
+concreta, responsável por saber como reagir aos eventos do mouse.
+
+Antes, o Controlador decidia o que fazer em cada evento consultando
+`tipofigura_var` e ramificando em uma cadeia de if/elif. Agora ele apenas
+pergunta ao dicionário de estados qual objeto corresponde à ferramenta
+selecionada e delega o evento a ele — o Controlador não precisa mais
+conhecer os nomes ou o comportamento de cada figura.
+
+@author Felipe Machado e Ranieri Pereira
+@version 3.0
+@since 2026-07-19
+"""
+
+from abc import ABC, abstractmethod
+from modelo.figuras import Linha, Rabisco, Retangulo, Oval, Circulo, Poligono
+
+
+class EstadoDesenho(ABC):
+    """
+    @brief Interface abstrata dos estados de desenho (padrão State).
+
+    Define os quatro eventos de mouse que o Controlador delega ao estado
+    atualmente selecionado. `iniciar`, `atualizar` e `incluir` são
+    obrigatórios em cada subclasse porque o comportamento muda conforme
+    a ferramenta. `finalizar_poligono` já vem com uma implementação
+    padrão, pois no sistema original o clique com o botão direito
+    finaliza a figura em construção da mesma forma independentemente
+    do tipo selecionado.
+
+    @author Felipe Machado e Ranieri Pereira
+    @version 3.0
+    @since 2026-07-19
+    """
+
+    @abstractmethod
+    def iniciar(self, controlador, event):
+        """
+        @brief Trata o clique do botão esquerdo do mouse (início da figura).
+        @param controlador: Controlador que delega o evento a este estado.
+        @type controlador: controlador.controlador.Controlador
+        @param event: Evento de mouse com coordenadas x e y.
+        @type event: tkinter.Event
+        """
+        pass
+
+    @abstractmethod
+    def atualizar(self, controlador, event):
+        """
+        @brief Trata o arraste do mouse com o botão esquerdo pressionado.
+        @param controlador: Controlador que delega o evento a este estado.
+        @type controlador: controlador.controlador.Controlador
+        @param event: Evento de mouse com coordenadas x e y.
+        @type event: tkinter.Event
+        """
+        pass
+
+    @abstractmethod
+    def incluir(self, controlador, event):
+        """
+        @brief Trata o soltar do botão esquerdo do mouse (fim da figura).
+        @param controlador: Controlador que delega o evento a este estado.
+        @type controlador: controlador.controlador.Controlador
+        @param event: Evento de mouse.
+        @type event: tkinter.Event
+        """
+        pass
+
+    def finalizar_poligono(self, controlador, event):
+        """
+        @brief Trata o clique com o botão direito do mouse.
+
+        Comportamento padrão, comum a todos os estados: adiciona a
+        figura em construção ao desenho se ela já estiver completa.
+        Só precisaria ser sobrescrito por um estado cujo botão direito
+        se comportasse de forma diferente — hoje nenhum precisa.
+
+        @param controlador: Controlador que delega o evento a este estado.
+        @type controlador: controlador.controlador.Controlador
+        @param event: Evento de mouse.
+        @type event: tkinter.Event
+        """
+        if controlador.figuranova is not None and not controlador.figuranova.incompleta():
+            controlador.desenho.figuras.append(controlador.figuranova)
+            controlador.figuranova = None
+        controlador.visao.desenhar_figuras(controlador.desenho.figuras)
+
+
+class EstadoFiguraDeArrastar(EstadoDesenho):
+    """
+    @brief Estado-base para as figuras criadas por arraste: Linha, Retângulo, Oval e Círculo.
+
+    As quatro ferramentas de arraste tratam `iniciar`, `atualizar` e
+    `incluir` de forma idêntica — a única diferença entre elas é qual
+    classe de figura instanciar. Esta classe concentra esse
+    comportamento comum e deixa a criação da figura a cargo de
+    `_criar_figura`, sobrescrito por cada subclasse concreta.
+
+    @author Felipe Machado e Ranieri Pereira
+    @version 3.0
+    @since 2026-07-19
+    """
+
+    def _criar_figura(self, x, y, cor_borda, cor_preenchimento):
+        """
+        @brief Cria a figura concreta correspondente a este estado.
+        @param x: Coordenada X inicial do arraste.
+        @type x: int
+        @param y: Coordenada Y inicial do arraste.
+        @type y: int
+        @param cor_borda: Cor de borda escolhida na Visão.
+        @type cor_borda: str
+        @param cor_preenchimento: Cor de preenchimento escolhida na Visão.
+        @type cor_preenchimento: str
+        @return: Nova figura a se tornar a figuranova do Controlador.
+        @rtype: modelo.figuras.FiguraDeArrastar
+        """
+        raise NotImplementedError
+
+    def iniciar(self, controlador, event):
+        cb = controlador.visao.cor_borda
+        cp = controlador.visao.cor_preenchimento
+        controlador.figuranova = self._criar_figura(event.x, event.y, cb, cp)
+
+    def atualizar(self, controlador, event):
+        if controlador.figuranova is None:
+            return
+        controlador.figuranova.atualizar(event.x, event.y)
+        controlador.visao.desenhar_figuras(controlador.desenho.figuras)
+        controlador.visao.desenhar_figuranova(controlador.figuranova)
+
+    def incluir(self, controlador, event):
+        if controlador.figuranova is not None and not controlador.figuranova.incompleta():
+            controlador.desenho.figuras.append(controlador.figuranova)
+            controlador.figuranova = None
+        controlador.visao.desenhar_figuras(controlador.desenho.figuras)
+
+
+class EstadoLinha(EstadoFiguraDeArrastar):
+    """
+    @brief Estado da ferramenta Linha.
+    @author Felipe Machado e Ranieri Pereira
+    @version 3.0
+    @since 2026-07-19
+    """
+
+    def _criar_figura(self, x, y, cor_borda, cor_preenchimento):
+        return Linha(x, y, cor_borda)
+
+
+class EstadoRetangulo(EstadoFiguraDeArrastar):
+    """
+    @brief Estado da ferramenta Retângulo.
+    @author Felipe Machado e Ranieri Pereira
+    @version 3.0
+    @since 2026-07-19
+    """
+
+    def _criar_figura(self, x, y, cor_borda, cor_preenchimento):
+        return Retangulo(x, y, cor_borda, cor_preenchimento)
+
+
+class EstadoOval(EstadoFiguraDeArrastar):
+    """
+    @brief Estado da ferramenta Oval.
+    @author Felipe Machado e Ranieri Pereira
+    @version 3.0
+    @since 2026-07-19
+    """
+
+    def _criar_figura(self, x, y, cor_borda, cor_preenchimento):
+        return Oval(x, y, cor_borda, cor_preenchimento)
+
+
+class EstadoCirculo(EstadoFiguraDeArrastar):
+    """
+    @brief Estado da ferramenta Círculo.
+    @author Felipe Machado e Ranieri Pereira
+    @version 3.0
+    @since 2026-07-19
+    """
+
+    def _criar_figura(self, x, y, cor_borda, cor_preenchimento):
+        return Circulo(x, y, cor_borda, cor_preenchimento)
+
+
+class EstadoRabisco(EstadoDesenho):
+    """
+    @brief Estado da ferramenta Rabisco (traço livre).
+
+    Difere das figuras de arraste porque, ao invés de mover apenas um
+    ponto final, acumula cada posição visitada pelo mouse durante o
+    arraste (`adicionar_ponto`).
+
+    @author Felipe Machado e Ranieri Pereira
+    @version 3.0
+    @since 2026-07-19
+    """
+
+    def iniciar(self, controlador, event):
+        cb = controlador.visao.cor_borda
+        controlador.figuranova = Rabisco(event.x, event.y, cb)
+
+    def atualizar(self, controlador, event):
+        if controlador.figuranova is None:
+            return
+        controlador.figuranova.adicionar_ponto(event.x, event.y)
+        controlador.visao.desenhar_figuras(controlador.desenho.figuras)
+        controlador.visao.desenhar_figuranova(controlador.figuranova)
+
+    def incluir(self, controlador, event):
+        if controlador.figuranova is not None and not controlador.figuranova.incompleta():
+            controlador.desenho.figuras.append(controlador.figuranova)
+            controlador.figuranova = None
+        controlador.visao.desenhar_figuras(controlador.desenho.figuras)
+
+
+class EstadoPoligono(EstadoDesenho):
+    """
+    @brief Estado da ferramenta Polígono.
+
+    Cada clique do botão esquerdo adiciona um vértice novo (ao invés de
+    iniciar uma figura nova a cada clique, como as demais ferramentas).
+    A figura só é efetivamente incluída no desenho ao clicar com o botão
+    direito, comportamento herdado de EstadoDesenho.finalizar_poligono —
+    por isso `incluir` (soltar o botão esquerdo) não faz nada aqui.
+
+    @author Felipe Machado e Ranieri Pereira
+    @version 3.0
+    @since 2026-07-19
+    """
+
+    def iniciar(self, controlador, event):
+        if controlador.figuranova is not None:
+            controlador.figuranova.adicionar_ponto(event.x, event.y)
+            controlador.visao.desenhar_figuras(controlador.desenho.figuras)
+            controlador.visao.desenhar_figuranova(controlador.figuranova)
+        else:
+            cb = controlador.visao.cor_borda
+            cp = controlador.visao.cor_preenchimento
+            controlador.figuranova = Poligono(event.x, event.y, cb, cp)
+
+    def atualizar(self, controlador, event):
+        if controlador.figuranova is None:
+            return
+        controlador.visao.desenhar_figuras(controlador.desenho.figuras)
+        controlador.visao.desenhar_figuranova(controlador.figuranova)
+        ultimo = controlador.figuranova.pontos[-1]
+        controlador.visao.areadesenho.create_line(
+            ultimo[0], ultimo[1], event.x, event.y,
+            fill=controlador.figuranova.cor_borda, dash=(4, 2)
+        )
+
+    def incluir(self, controlador, event):
+        """
+        @brief Não finaliza o polígono ao soltar o botão esquerdo.
+
+        A finalização do polígono acontece apenas em
+        `finalizar_poligono`, disparado pelo clique com o botão direito.
+        """
+        pass
